@@ -1,0 +1,7 @@
+model/
+/TranUNet/data/
+*.h5
+*.npz
+*.pth
+*.pyc
+__pycache__/
