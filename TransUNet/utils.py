@@ -4,7 +4,9 @@ from medpy import metric
 from scipy.ndimage import zoom
 import torch.nn as nn
 import SimpleITK as sitk
-
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+import os
 
 class DiceLoss(nn.Module):
     def __init__(self, n_classes):
@@ -58,7 +60,7 @@ def calculate_metric_percase(pred, gt):
         return 0, 0
 
 
-def test_single_volume(image, label, net, classes, patch_size=[256, 256], test_save_path=None, case=None, z_spacing=1):
+def test_single_volume(image, label, net, classes, patch_size=[256, 256], test_save_path=None, case=None, z_spacing=1, visualize=True):
     image, label = image.squeeze(0).cpu().detach().numpy(), label.squeeze(0).cpu().detach().numpy()
     if len(image.shape) == 3:
         prediction = np.zeros_like(label)
@@ -85,6 +87,10 @@ def test_single_volume(image, label, net, classes, patch_size=[256, 256], test_s
         with torch.no_grad():
             out = torch.argmax(torch.softmax(net(input), dim=1), dim=1).squeeze(0)
             prediction = out.cpu().detach().numpy()
+
+    if visualize and test_save_path is not None:
+        vis_path = os.path.join(test_save_path, f'{case}_comparison.png')
+        visualize_predictions(image, label, prediction, case_name=case, save_path=vis_path)
     metric_list = []
     for i in range(1, classes):
         metric_list.append(calculate_metric_percase(prediction == i, label == i))
@@ -100,3 +106,49 @@ def test_single_volume(image, label, net, classes, patch_size=[256, 256], test_s
         sitk.WriteImage(img_itk, test_save_path + '/'+ case + "_img.nii.gz")
         sitk.WriteImage(lab_itk, test_save_path + '/'+ case + "_gt.nii.gz")
     return metric_list
+
+
+def visualize_predictions(image, label, prediction, case_name, save_path=None, num_slices=5):
+    """
+    Shows side-by-side: Input | Ground Truth | Prediction
+    Works for 3D volumes (picks evenly spaced slices) or 2D images.
+    """
+    if len(image.shape) == 3:
+        # Pick evenly spaced slices across the volume
+        indices = np.linspace(0, image.shape[0] - 1, num_slices, dtype=int)
+    else:
+        indices = [0]
+        image = image[np.newaxis]
+        label = label[np.newaxis]
+        prediction = prediction[np.newaxis]
+
+    fig, axes = plt.subplots(len(indices), 3, figsize=(12, 4 * len(indices)))
+    if len(indices) == 1:
+        axes = axes[np.newaxis]
+
+    for row, idx in enumerate(indices):
+        # --- Input Image ---
+        axes[row, 0].imshow(image[idx], cmap='gray')
+        axes[row, 0].set_title(f'Input (slice {idx})')
+        axes[row, 0].axis('off')
+
+        # --- Ground Truth ---
+        axes[row, 1].imshow(image[idx], cmap='gray')
+        axes[row, 1].imshow(label[idx], cmap='jet', alpha=0.5, vmin=0, vmax=8)
+        axes[row, 1].set_title('Ground Truth')
+        axes[row, 1].axis('off')
+
+        # --- Prediction ---
+        axes[row, 2].imshow(image[idx], cmap='gray')
+        axes[row, 2].imshow(prediction[idx], cmap='jet', alpha=0.5, vmin=0, vmax=8)
+        axes[row, 2].set_title('Prediction')
+        axes[row, 2].axis('off')
+
+    plt.suptitle(f'Case: {case_name}', fontsize=14, fontweight='bold')
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        plt.close()
+    else:
+        plt.show()

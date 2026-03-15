@@ -8,9 +8,11 @@ Extends vanilla TransUNet with:
        • U   (B, N, C)  membership matrix
        • S_f (B, N, N)  fuzzy similarity  S_f(i,j) = Σ_k u_ik·u_jk
 
-  2. FuzzyAttention – standard MHSA with an additive fuzzy bias:
-       Attn = softmax( QKᵀ/√d  +  λ·S_f ) V
-       λ is a per-layer learnable scalar (initialised at 0.1).
+  2. FuzzyAttention – MHSA with dual structural bias:
+       Attn = softmax( QKᵀ/√d  +  λ·F  +  β·S ) V
+         F_ij = Σ_k u_ik·u_jk          (fuzzy cluster similarity)
+         S_ij = exp(-d(i,j)²/σ²)       (Gaussian spatial proximity)
+       λ, β, σ are all per-layer learnable scalars.
 
   3. FCMSkipGate – wraps each ResNet skip connection with a
        spatial gate derived from the fuzzy memberships U.
@@ -77,25 +79,120 @@ ACT2FN = {
 
 
 # ===========================================================================
-# Fuzzy-augmented Multi-Head Self-Attention
+# Spatial Bias  S_ij = exp( -d(i,j)² / σ² )
+# ===========================================================================
+
+class SpatialBias(nn.Module):
+    """
+    Computes a Gaussian spatial proximity bias over the patch grid.
+
+    For a sequence of N patches laid out on a √N × √N grid, the bias
+    between patch i and patch j is:
+
+        S_ij = exp( -d(i,j)² / σ² )
+
+    where d(i,j) is the Euclidean distance between their 2-D grid
+    coordinates (in patch units).
+
+    Properties:
+      • S_ii = 1   (a patch is maximally similar to itself)
+      • Very close patches → ~1
+      • Medium distance    → ~0.5  (when d ≈ σ·√ln2 ≈ 0.83σ)
+      • Far patches        → ~0
+
+    σ is stored as log(σ) so it remains strictly positive under gradient
+    updates.  β (the global scale applied in attention) lives in
+    FuzzyAttention, not here.
+
+    The matrix is computed lazily on the first forward call for a given N
+    and cached as a non-parameter buffer so it moves with the model to GPU.
+    """
+
+    def __init__(self, sigma_init: float = 7.0):
+        super().__init__()
+        # log-parameterised σ — always positive, freely optimisable
+        self.log_sigma = nn.Parameter(
+            torch.tensor(math.log(sigma_init), dtype=torch.float32)
+        )
+        # cache: maps N → precomputed squared-distance matrix (N, N)
+        self._dist2_cache: dict = {}
+
+    # ------------------------------------------------------------------
+    def _get_dist2(self, N: int, device: torch.device) -> torch.Tensor:
+        """
+        Returns squared Euclidean distances on the √N × √N patch grid.
+        Result shape: (N, N).  Cached after first call for each N.
+        """
+        if N not in self._dist2_cache:
+            H = W = int(math.sqrt(N))
+            # grid coordinates for every patch  (N, 2)
+            rows = torch.arange(H, dtype=torch.float32, device=device)
+            cols = torch.arange(W, dtype=torch.float32, device=device)
+            # meshgrid → (H, W) each
+            gy, gx = torch.meshgrid(rows, cols, indexing='ij')
+            coords = torch.stack([gy.reshape(-1), gx.reshape(-1)], dim=1)  # (N,2)
+            # pairwise squared distances  (N, N)
+            diff   = coords.unsqueeze(0) - coords.unsqueeze(1)             # (N,N,2)
+            dist2  = (diff ** 2).sum(dim=-1)                               # (N, N)
+            self._dist2_cache[N] = dist2
+        else:
+            # move cached tensor to current device if necessary
+            self._dist2_cache[N] = self._dist2_cache[N].to(device)
+
+        return self._dist2_cache[N]
+
+    # ------------------------------------------------------------------
+    def forward(self, N: int, device: torch.device) -> torch.Tensor:
+        """
+        Args:
+            N      : number of patches (must be a perfect square)
+            device : target device
+
+        Returns:
+            S : (N, N)  spatial bias matrix, values in (0, 1]
+        """
+        sigma  = self.log_sigma.exp()               # σ > 0  always
+        dist2  = self._get_dist2(N, device)         # (N, N)
+        S      = torch.exp(-dist2 / (sigma ** 2))   # (N, N)
+        return S
+
+
+# ===========================================================================
+# Fuzzy + Spatial Dual-Bias Multi-Head Self-Attention
 # ===========================================================================
 
 class FuzzyAttention(nn.Module):
     """
-    Multi-Head Self-Attention with an additive fuzzy similarity bias.
+    Multi-Head Self-Attention with two additive structural biases:
 
-        scores = QKᵀ / √d  +  λ · S_f
+        scores = QKᵀ / √d  +  λ · F  +  β · S
 
-    λ is a per-layer learnable scalar, initialised at `fuzzy_lambda_init`.
-    When S_f is None (e.g. at load_from time) it falls back to plain MHSA.
+    where:
+        F  (B, N, N)  Fuzzy similarity:  F_ij = Σ_k u_ik · u_jk
+                      Patches in the same fuzzy cluster attract each other.
+
+        S  (N, N)     Spatial proximity:  S_ij = exp(-d(i,j)² / σ²)
+                      Nearby patches attract each other regardless of content.
+
+    Learnable scalars per transformer layer:
+        λ   (fuzzy_lambda)  — scales fuzzy bias  (init 0.1)
+        β   (spatial_beta)  — scales spatial bias (init 0.1)
+        σ   (inside SpatialBias.log_sigma) — Gaussian bandwidth (init 7.0
+            patch units ≈ half the 14×14 grid diagonal)
+
+    When F is None the fuzzy term is skipped (plain MHSA + spatial bias).
+    Spatial bias is always active once the layer is constructed.
     """
 
-    def __init__(self, config, vis, fuzzy_lambda_init: float = 0.1):
+    def __init__(self, config, vis,
+                 fuzzy_lambda_init:  float = 0.1,
+                 spatial_beta_init:  float = 0.1,
+                 spatial_sigma_init: float = 7.0):
         super().__init__()
         self.vis = vis
         self.num_attention_heads = config.transformer["num_heads"]
         self.attention_head_size = int(config.hidden_size / self.num_attention_heads)
-        self.all_head_size = self.num_attention_heads * self.attention_head_size
+        self.all_head_size       = self.num_attention_heads * self.attention_head_size
 
         self.query = Linear(config.hidden_size, self.all_head_size)
         self.key   = Linear(config.hidden_size, self.all_head_size)
@@ -106,39 +203,58 @@ class FuzzyAttention(nn.Module):
         self.proj_dropout = Dropout(config.transformer["attention_dropout_rate"])
         self.softmax      = Softmax(dim=-1)
 
-        # Learnable fuzzy bias scale — one scalar per transformer layer
+        # ── Learnable bias scales ──────────────────────────────────────
+        # λ · F  :  fuzzy cluster similarity
         self.fuzzy_lambda = nn.Parameter(
             torch.tensor(fuzzy_lambda_init, dtype=torch.float32)
         )
+        # β · S  :  spatial Gaussian proximity
+        self.spatial_beta = nn.Parameter(
+            torch.tensor(spatial_beta_init, dtype=torch.float32)
+        )
+
+        # SpatialBias module owns log_σ and the dist² cache
+        self.spatial_bias = SpatialBias(sigma_init=spatial_sigma_init)
 
     # ------------------------------------------------------------------
     def _transpose_for_scores(self, x):
         new_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
-        return x.view(*new_shape).permute(0, 2, 1, 3)  # (B, h, N, d_h)
+        return x.view(*new_shape).permute(0, 2, 1, 3)   # (B, h, N, d_h)
 
     # ------------------------------------------------------------------
     def forward(self, hidden_states, S_f=None):
         """
         Args:
             hidden_states : (B, N, D)
-            S_f           : (B, N, N) fuzzy similarity bias  [optional]
+            S_f           : (B, N, N) fuzzy similarity F  [optional]
 
         Returns:
             attention_output : (B, N, D)
             weights          : attention probabilities or None
         """
+        B, N, _ = hidden_states.shape
+
         Q = self._transpose_for_scores(self.query(hidden_states))
         K = self._transpose_for_scores(self.key(hidden_states))
         V = self._transpose_for_scores(self.value(hidden_states))
 
+        # ── Base dot-product scores ────────────────────────────────────
         scores = torch.matmul(Q, K.transpose(-1, -2)) / math.sqrt(self.attention_head_size)
+        # scores: (B, h, N, N)
 
-        # ---- fuzzy bias  ------------------------------------------------
+        # ── λ · F  :  fuzzy bias ──────────────────────────────────────
+        # F_ij ∈ [0,1]:  high when patches i,j share cluster membership
         if S_f is not None:
-            # S_f: (B, N, N)  →  broadcast over heads: (B, 1, N, N)
             scores = scores + self.fuzzy_lambda * S_f.unsqueeze(1)
-        # -----------------------------------------------------------------
+            # S_f (B,N,N) → (B,1,N,N) broadcasts over heads
 
+        # ── β · S  :  spatial bias ────────────────────────────────────
+        # S_ij = exp(-d(i,j)²/σ²) ∈ (0,1]:  decays with patch distance
+        S = self.spatial_bias(N, hidden_states.device)   # (N, N)
+        scores = scores + self.spatial_beta * S.unsqueeze(0).unsqueeze(0)
+        # S (N,N) → (1,1,N,N) broadcasts over batch and heads
+
+        # ── Softmax + weighted sum ─────────────────────────────────────
         probs   = self.softmax(scores)
         weights = probs if self.vis else None
         probs   = self.attn_dropout(probs)
@@ -152,18 +268,20 @@ class FuzzyAttention(nn.Module):
 
     # ------------------------------------------------------------------
     def load_from(self, weights, n_block):
-        """Load pre-trained Q/K/V/out weights from Google ViT checkpoint."""
+        """Load pre-trained Q/K/V/out weights from Google ViT checkpoint.
+        λ, β, and log_σ are new params — they keep their random-init values.
+        """
         ROOT = f"Transformer/encoderblock_{n_block}"
-        D = self.all_head_size
+        D    = self.all_head_size
         with torch.no_grad():
-            q_w = np2th(weights[pjoin(ROOT, ATTENTION_Q, "kernel")]).view(D, D).t()
-            k_w = np2th(weights[pjoin(ROOT, ATTENTION_K, "kernel")]).view(D, D).t()
-            v_w = np2th(weights[pjoin(ROOT, ATTENTION_V, "kernel")]).view(D, D).t()
+            q_w = np2th(weights[pjoin(ROOT, ATTENTION_Q,   "kernel")]).view(D, D).t()
+            k_w = np2th(weights[pjoin(ROOT, ATTENTION_K,   "kernel")]).view(D, D).t()
+            v_w = np2th(weights[pjoin(ROOT, ATTENTION_V,   "kernel")]).view(D, D).t()
             o_w = np2th(weights[pjoin(ROOT, ATTENTION_OUT, "kernel")]).view(D, D).t()
 
-            q_b = np2th(weights[pjoin(ROOT, ATTENTION_Q, "bias")]).view(-1)
-            k_b = np2th(weights[pjoin(ROOT, ATTENTION_K, "bias")]).view(-1)
-            v_b = np2th(weights[pjoin(ROOT, ATTENTION_V, "bias")]).view(-1)
+            q_b = np2th(weights[pjoin(ROOT, ATTENTION_Q,   "bias")]).view(-1)
+            k_b = np2th(weights[pjoin(ROOT, ATTENTION_K,   "bias")]).view(-1)
+            v_b = np2th(weights[pjoin(ROOT, ATTENTION_V,   "bias")]).view(-1)
             o_b = np2th(weights[pjoin(ROOT, ATTENTION_OUT, "bias")]).view(-1)
 
             self.query.weight.copy_(q_w); self.query.bias.copy_(q_b)

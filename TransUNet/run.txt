@@ -1,0 +1,39 @@
+CUDA_VISIBLE_DEVICES=0 python train.py \
+    --dataset Synapse \
+    --vit_name R50-ViT-B_16 \
+    --max_epochs 150 \
+    --batch_size 24 \
+    --img_size 224 \
+    --base_lr 0.01 \
+    --n_skip 3
+
+
+CUDA_VISIBLE_DEVICES=0 python test.py \
+    --dataset Synapse \
+    --vit_name R50-ViT-B_16 \
+    --img_size 224 \
+    --n_skip 3 \
+    --max_epochs 120 \
+    --batch_size 24 \
+    --is_savenii \
+    --snapshot_path "/mnt/c/Users/mp29984/Desktop/Master's/CI/Project/model/TU_Synapse224/TU_pretrain_R50-ViT-B_16_skip3_epo150_bs24_224_noteFuzzyAtt-SpatialAtt/BEST_bs24_skip3_ep150_run20260306_025103_epoch104_dice0.9342.pth"
+
+
+CUDA_VISIBLE_DEVICES=0 python TransUNet/visualize_predictions.py \
+  --pred_dir predictions/TU_Synapse224/BEST_bs24_skip3_ep150_run20260306_025103_epoch104_dice0.9342 \
+  --n_cases 3 \
+  --n_slices 5 \
+  --single_case case0001\
+  --out comparison_grid.png
+
+=======================================================
+  Class 01 | dice 0.8501 | hd95 11.0333
+  Class 02 | dice 0.5983 | hd95 17.9114
+  Class 03 | dice 0.8048 | hd95 62.7558
+  Class 04 | dice 0.7519 | hd95 58.6739
+  Class 05 | dice 0.9436 | hd95 24.4561
+  Class 06 | dice 0.5388 | hd95 14.9374
+  Class 07 | dice 0.8416 | hd95 50.3537
+  Class 08 | dice 0.7533 | hd95 17.4534
+=======================================================
+  MEAN   | dice 0.7603 | hd95 32.1969

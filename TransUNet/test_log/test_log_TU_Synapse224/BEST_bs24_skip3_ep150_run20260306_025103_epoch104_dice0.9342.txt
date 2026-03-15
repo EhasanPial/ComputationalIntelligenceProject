@@ -1,0 +1,56 @@
+[05:14:13.172] Namespace(volume_path='./data/Synapse/test_vol_h5', dataset='Synapse', num_classes=9, list_dir='./lists/lists_Synapse', max_iterations=20000, max_epochs=120, batch_size=24, img_size=224, is_savenii=True, n_skip=3, vit_name='R50-ViT-B_16', test_save_dir='../predictions', deterministic=1, base_lr=0.01, seed=1234, vit_patches_size=16, snapshot_path="/mnt/c/Users/mp29984/Desktop/Master's/CI/Project/model/TU_Synapse224/TU_pretrain_R50-ViT-B_16_skip3_epo150_bs24_224_noteFuzzyAtt-SpatialAtt/BEST_bs24_skip3_ep150_run20260306_025103_epoch104_dice0.9342.pth", Dataset=<class 'datasets.dataset_synapse.Synapse_dataset'>, z_spacing=1, is_pretrain=True, exp='TU_Synapse224')
+[05:14:13.172] Checkpoint : /mnt/c/Users/mp29984/Desktop/Master's/CI/Project/model/TU_Synapse224/TU_pretrain_R50-ViT-B_16_skip3_epo150_bs24_224_noteFuzzyAtt-SpatialAtt/BEST_bs24_skip3_ep150_run20260306_025103_epoch104_dice0.9342.pth
+[05:14:13.191] 12 test cases
+[05:15:16.548] idx 0  case case0008  mean_dice 0.6272  mean_hd95 18.3452
+[05:15:52.606] idx 1  case case0022  mean_dice 0.8917  mean_hd95 21.2171
+[05:16:33.795] idx 2  case case0038  mean_dice 0.7601  mean_hd95 30.8268
+[05:17:56.278] idx 3  case case0036  mean_dice 0.8231  mean_hd95 9.9037
+[05:18:57.362] idx 4  case case0032  mean_dice 0.7846  mean_hd95 17.4659
+[05:19:55.341] idx 5  case case0002  mean_dice 0.8608  mean_hd95 20.8421
+[05:20:35.120] idx 6  case case0029  mean_dice 0.6515  mean_hd95 56.2328
+[05:22:05.766] idx 7  case case0003  mean_dice 0.5633  mean_hd95 91.8734
+[05:23:09.296] idx 8  case case0001  mean_dice 0.7448  mean_hd95 42.7549
+[05:24:06.384] idx 9  case case0004  mean_dice 0.7691  mean_hd95 29.3758
+[05:24:41.556] idx 10  case case0025  mean_dice 0.7622  mean_hd95 44.5312
+[05:25:15.398] idx 11  case case0035  mean_dice 0.8852  mean_hd95 2.9937
+[05:25:15.418] 
+=======================================================
+[05:25:15.418]   Class 01 | dice 0.8501 | hd95 11.0333
+[05:25:15.419]   Class 02 | dice 0.5983 | hd95 17.9114
+[05:25:15.419]   Class 03 | dice 0.8048 | hd95 62.7558
+[05:25:15.419]   Class 04 | dice 0.7519 | hd95 58.6739
+[05:25:15.419]   Class 05 | dice 0.9436 | hd95 24.4561
+[05:25:15.420]   Class 06 | dice 0.5388 | hd95 14.9374
+[05:25:15.420]   Class 07 | dice 0.8416 | hd95 50.3537
+[05:25:15.420]   Class 08 | dice 0.7533 | hd95 17.4534
+[05:25:15.420] =======================================================
+[05:25:15.421]   MEAN   | dice 0.7603 | hd95 32.1969
+[05:25:15.421] =======================================================
+[14:00:24.653] Namespace(volume_path='./data/Synapse/test_vol_h5', dataset='Synapse', num_classes=9, list_dir='./lists/lists_Synapse', max_iterations=20000, max_epochs=120, batch_size=24, img_size=224, is_savenii=True, n_skip=3, vit_name='R50-ViT-B_16', test_save_dir='../predictions', deterministic=1, base_lr=0.01, seed=1234, vit_patches_size=16, snapshot_path="/mnt/c/Users/mp29984/Desktop/Master's/CI/Project/model/TU_Synapse224/TU_pretrain_R50-ViT-B_16_skip3_epo150_bs24_224_noteFuzzyAtt-SpatialAtt/BEST_bs24_skip3_ep150_run20260306_025103_epoch104_dice0.9342.pth", Dataset=<class 'datasets.dataset_synapse.Synapse_dataset'>, z_spacing=1, is_pretrain=True, exp='TU_Synapse224')
+[14:00:24.653] Checkpoint : /mnt/c/Users/mp29984/Desktop/Master's/CI/Project/model/TU_Synapse224/TU_pretrain_R50-ViT-B_16_skip3_epo150_bs24_224_noteFuzzyAtt-SpatialAtt/BEST_bs24_skip3_ep150_run20260306_025103_epoch104_dice0.9342.pth
+[14:00:24.666] 12 test cases
+[14:01:37.282] idx 0  case case0008  mean_dice 0.6272  mean_hd95 18.3452
+[14:02:20.575] idx 1  case case0022  mean_dice 0.8917  mean_hd95 21.2171
+[14:03:06.677] idx 2  case case0038  mean_dice 0.7601  mean_hd95 30.8268
+[14:04:37.122] idx 3  case case0036  mean_dice 0.8231  mean_hd95 9.9037
+[14:05:46.601] idx 4  case case0032  mean_dice 0.7846  mean_hd95 17.4659
+[14:06:50.351] idx 5  case case0002  mean_dice 0.8608  mean_hd95 20.8421
+[14:07:33.937] idx 6  case case0029  mean_dice 0.6515  mean_hd95 56.2328
+[14:09:06.319] idx 7  case case0003  mean_dice 0.5633  mean_hd95 91.8734
+[14:10:19.188] idx 8  case case0001  mean_dice 0.7448  mean_hd95 42.7549
+[14:11:28.054] idx 9  case case0004  mean_dice 0.7691  mean_hd95 29.3758
+[14:12:10.150] idx 10  case case0025  mean_dice 0.7622  mean_hd95 44.5312
+[14:12:49.609] idx 11  case case0035  mean_dice 0.8852  mean_hd95 2.9937
+[14:12:49.631] 
+=======================================================
+[14:12:49.632]   Class 01 | dice 0.8501 | hd95 11.0333
+[14:12:49.632]   Class 02 | dice 0.5983 | hd95 17.9114
+[14:12:49.633]   Class 03 | dice 0.8048 | hd95 62.7558
+[14:12:49.633]   Class 04 | dice 0.7519 | hd95 58.6739
+[14:12:49.633]   Class 05 | dice 0.9436 | hd95 24.4561
+[14:12:49.634]   Class 06 | dice 0.5388 | hd95 14.9374
+[14:12:49.634]   Class 07 | dice 0.8416 | hd95 50.3537
+[14:12:49.634]   Class 08 | dice 0.7533 | hd95 17.4534
+[14:12:49.634] =======================================================
+[14:12:49.635]   MEAN   | dice 0.7603 | hd95 32.1969
+[14:12:49.635] =======================================================

@@ -129,7 +129,7 @@ class FCMSkipGate(nn.Module):
         """
         Args:
             skip : (B, C_skip, H, W)   ResNet skip feature map
-            U    : (B, N, K)            fuzzy membership from bottleneck
+            U    : (B, N, K)           fuzzy membership from bottleneck
 
         Returns:
             gated skip of shape (B, C_skip, H, W)
